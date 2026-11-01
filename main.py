@@ -54,12 +54,26 @@ def test_password_complexity(url, username, username_field, password_field, subm
     """
     results = {}
     try:
+        # Read what this loop really tests: it tries to log in to one
+        # real account with each candidate password. That measures
+        # whether this account's password is guessable, not the site's
+        # complexity policy, which is enforced when a password is set,
+        # a moment this tool never reaches. It also fires the attempts
+        # back to back with no delay and no timeout on the request, so
+        # against a live login it can lock the account it is testing.
         for password in test_passwords:
             data = {username_field: username, password_field: password}
             try:
                 response = requests.post(url, data=data)
                 response.raise_for_status()  # Raise HTTPError for bad responses (4xx or 5xx)
 
+                # Two defaults shape every verdict. Both regexes
+                # default to empty strings, so without them every
+                # attempt lands in the Inconclusive branch below no
+                # matter what the server answered. And because of the
+                # raise above, a login endpoint that answers failed
+                # attempts with a 401 never reaches the regex checks at
+                # all: it is recorded as Request Failed instead.
                 if success_regex and re.search(success_regex, response.text):
                     results[password] = "Login Successful (Unexpected)"
                     logging.warning(f"Password '{password}' successfully logged in, indicating a weak password policy.")
@@ -128,6 +142,10 @@ def main():
         )
 
         print("Password Complexity Analysis Results:")
+        # Every tested password is printed in clear here, and the log
+        # lines inside the test do the same, including for the one
+        # that logged in. Whoever keeps this output keeps working
+        # credentials for the account that was tested.
         for password, result in results.items():
             print(f"- Password: '{password}', Result: {result}")
 
